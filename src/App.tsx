@@ -143,6 +143,7 @@ function AppContent() {
   const [repeatMode, setRepeatMode] = useState<'none' | 'one' | 'all'>('none');
   const [queue, setQueue] = useState<Song[]>([]);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [apiStatus, setApiStatus] = useState<'checking' | 'ok' | 'error'>('checking');
 
   useEffect(() => {
     if (!supabase) {
@@ -153,6 +154,11 @@ function AppContent() {
     const initApp = async () => {
       console.log("[APP] Iniciando initApp...");
       setLoadingStatus('Iniciando...');
+
+      // Test API Reachability
+      fetch('/api/health')
+        .then(r => r.ok ? setApiStatus('ok') : setApiStatus('error'))
+        .catch(() => setApiStatus('error'));
       
       // 1. Check for success parameter from Stripe (fast)
       const params = new URLSearchParams(window.location.search);
@@ -237,6 +243,7 @@ function AppContent() {
           setQueue(processedSongs);
           setCurrentSong(processedSongs[0]);
         } else {
+          console.warn("[APP] Usando músicas de exemplo (Mock Data)");
           setSongs(MOCK_SONGS);
           setQueue(MOCK_SONGS);
           setCurrentSong(MOCK_SONGS[0]);
@@ -265,6 +272,12 @@ function AppContent() {
     initApp();
 
     // 4. Auth Listener
+    if (!supabase) {
+      console.error("[AUTH] Supabase não disponível para o listener");
+      setLoading(false);
+      return;
+    }
+
     const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
       console.log(`[AUTH] Evento: ${event}, Usuário: ${session?.user?.email || 'Nenhum'}`);
       setUser(session?.user ?? null);
@@ -346,6 +359,10 @@ function AppContent() {
   const categories = Array.from(new Set(songs.map(s => s.category || 'Outros')));
   const themes = Array.from(new Set(songs.map(s => s.theme || 'Geral'))).slice(0, 8);
 
+  console.log("[DEBUG] songs.length:", songs.length);
+  console.log("[DEBUG] categories:", categories);
+  console.log("[DEBUG] loading:", loading);
+
   useEffect(() => {
     localStorage.setItem('celeste_favorites', JSON.stringify(favorites));
   }, [favorites]);
@@ -379,18 +396,19 @@ function AppContent() {
         console.log("checkSubscription: Perfil não encontrado ou erro de permissão. Tentando inicializar via servidor...");
         
         try {
-          const response = await fetch('/api/init-profile', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ userId, email: userEmail })
-          });
-          
-          if (response.ok) {
-            const result = await response.json();
-            data = result.profile;
-            error = null;
-          } else {
-            console.error("checkSubscription: Falha ao inicializar perfil via servidor");
+          // Só tentamos a API se ela estiver respondendo
+          if (apiStatus === 'ok') {
+            const response = await fetch('/api/init-profile', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ userId, email: userEmail })
+            });
+            
+            if (response.ok) {
+              const result = await response.json();
+              data = result.profile;
+              error = null;
+            }
           }
         } catch (fetchErr) {
           console.error("checkSubscription: Erro ao chamar init-profile:", fetchErr);
@@ -421,7 +439,10 @@ function AppContent() {
   };
 
   const handleGoogleLogin = async () => {
-    if (!supabase) return;
+    if (!supabase) {
+      setLoginError("Erro: O banco de dados (Supabase) não está configurado corretamente no servidor.");
+      return;
+    }
     setIsLoggingIn(true);
     setLoginError(null);
     try {
@@ -1255,6 +1276,32 @@ function AppContent() {
             </motion.div>
           )}
         </AnimatePresence>
+        {/* Debug Info (Only for development/troubleshooting) */}
+        {(dbError || !supabase || apiStatus === 'error') && (
+          <div className="mt-20 p-6 bg-gray-50 rounded-3xl border border-gray-100">
+            <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">Status do Sistema</h4>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="flex items-center gap-3">
+                <div className={cn("w-2 h-2 rounded-full", supabase ? "bg-green-500" : "bg-red-500")} />
+                <span className="text-xs font-medium">Supabase Cliente: {supabase ? "Conectado" : "Desconectado"}</span>
+              </div>
+              <div className="flex items-center gap-3">
+                <div className={cn("w-2 h-2 rounded-full", songs.length > 0 ? "bg-green-500" : "bg-amber-500")} />
+                <span className="text-xs font-medium">Banco de Dados: {songs.length > 0 ? `${songs.length} músicas` : "Vazio / Mock"}</span>
+              </div>
+              <div className="flex items-center gap-3">
+                <div className={cn("w-2 h-2 rounded-full", apiStatus === 'ok' ? "bg-green-500" : apiStatus === 'checking' ? "bg-gray-300" : "bg-red-500")} />
+                <span className="text-xs font-medium">Servidor API: {apiStatus === 'ok' ? "Online" : apiStatus === 'checking' ? "Verificando..." : "Erro 404 / Offline"}</span>
+              </div>
+            </div>
+            {(apiStatus === 'error' || !supabase) && (
+              <p className="mt-4 text-[10px] text-gray-400 leading-relaxed">
+                <b>Dica:</b> Se o Servidor API estiver em vermelho, verifique se o <b>netlify.toml</b> está correto. 
+                Se o Supabase estiver em vermelho, verifique as chaves <b>VITE_SUPABASE_URL</b> e <b>VITE_SUPABASE_ANON_KEY</b> no painel do Netlify.
+              </p>
+            )}
+          </div>
+        )}
       </main>
 
       {/* Floating Navigation (Mobile & Tablet) */}

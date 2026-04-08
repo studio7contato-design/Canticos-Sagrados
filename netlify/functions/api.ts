@@ -7,12 +7,29 @@ import dotenv from "dotenv";
 dotenv.config();
 
 const app = express();
+
+// Request logger
+app.use((req, res, next) => {
+  console.log(`[API REQUEST] ${req.method} ${req.url}`);
+  next();
+});
+
 const apiRouter = Router();
 
 // Inicializa Supabase Admin
 const supabaseUrl = process.env.VITE_SUPABASE_URL || "";
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
+
+if (!supabaseUrl) console.error("[API] VITE_SUPABASE_URL is missing");
+if (!supabaseServiceKey) console.error("[API] SUPABASE_SERVICE_ROLE_KEY is missing");
+
 const supabaseAdmin = (supabaseUrl && supabaseServiceKey) ? createClient(supabaseUrl, supabaseServiceKey) : null;
+
+if (supabaseAdmin) {
+  console.log("[API] Supabase Admin initialized successfully");
+} else {
+  console.warn("[API] Supabase Admin NOT initialized - Webhooks and Profile Init will fail");
+}
 
 // Health check
 apiRouter.get("/health", (req, res) => {
@@ -96,7 +113,8 @@ apiRouter.post("/init-profile", async (req, res) => {
   const { userId, email } = req.body;
 
   if (!supabaseAdmin || !userId) {
-    return res.status(400).json({ error: "Configuração incompleta ou userId ausente" });
+    const reason = !supabaseAdmin ? "SUPABASE_SERVICE_ROLE_KEY não configurada no servidor" : "userId ausente";
+    return res.status(400).json({ error: `Configuração incompleta: ${reason}` });
   }
 
   try {
@@ -138,9 +156,22 @@ apiRouter.get("/auth-callback", (req, res) => {
   `);
 });
 
-// Mount the router at both the root and the expected Netlify path for maximum compatibility
-app.use("/api", apiRouter);
+// Mount the router
+// Maximum compatibility: mount at root, /api, and the full netlify path
 app.use("/.netlify/functions/api", apiRouter);
+app.use("/api", apiRouter);
 app.use("/", apiRouter);
 
-export const handler = serverless(app);
+// Catch-all for 404s inside the function
+app.use((req, res) => {
+  console.log(`[API 404] ${req.method} ${req.url} - No route matched`);
+  res.status(404).json({ 
+    error: "Endpoint não encontrado no servidor de API",
+    method: req.method,
+    path: req.url,
+    hint: "Verifique se a rota está correta no netlify.toml e no código do servidor."
+  });
+});
+
+const handler = serverless(app);
+export { handler };

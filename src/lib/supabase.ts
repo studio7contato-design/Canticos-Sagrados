@@ -6,10 +6,12 @@ export const supabase = (() => {
     const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
     const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
     
-    if (supabaseUrl && supabaseAnonKey && supabaseUrl.startsWith('http')) {
+    if (supabaseUrl && supabaseAnonKey) {
       try {
         // Validação básica de URL
-        new URL(supabaseUrl);
+        const url = new URL(supabaseUrl);
+        if (url.protocol !== 'https:' && url.protocol !== 'http:') throw new Error('Invalid protocol');
+        
         const client = createClient(supabaseUrl, supabaseAnonKey);
         console.log("Supabase client created successfully");
         return client;
