@@ -130,7 +130,7 @@ function AppContent() {
     console.log("App component mounted successfully");
   }, []);
 
-  const [songs, setSongs] = useState<Song[]>([]);
+  const [songs, setSongs] = useState<Song[]>(MOCK_SONGS);
   const [albums, setAlbums] = useState<Album[]>([]);
   const [selectedAlbum, setSelectedAlbum] = useState<Album | null>(null);
   const [user, setUser] = useState<any>(null);
@@ -243,10 +243,9 @@ function AppContent() {
           setQueue(processedSongs);
           setCurrentSong(processedSongs[0]);
         } else {
-          console.warn("[APP] Usando músicas de exemplo (Mock Data)");
-          setSongs(MOCK_SONGS);
+          console.warn("[APP] Nenhuma música no Supabase. Mantendo MOCK_SONGS.");
           setQueue(MOCK_SONGS);
-          setCurrentSong(MOCK_SONGS[0]);
+          if (!currentSong) setCurrentSong(MOCK_SONGS[0]);
         }
 
         // 5. Handle Albums

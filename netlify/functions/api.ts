@@ -156,22 +156,27 @@ apiRouter.get("/auth-callback", (req, res) => {
   `);
 });
 
-// Mount the router
-// Maximum compatibility: mount at root, /api, and the full netlify path
-app.use("/.netlify/functions/api", apiRouter);
-app.use("/api", apiRouter);
+// Mount the router at the root of the function
+// Netlify functions are accessed at /.netlify/functions/[name]
+// We use a middleware to strip the function name prefix if it exists
+app.use((req, res, next) => {
+  const prefix = "/.netlify/functions/api";
+  if (req.url.startsWith(prefix)) {
+    req.url = req.url.slice(prefix.length) || "/";
+  }
+  next();
+});
+
 app.use("/", apiRouter);
 
-// Catch-all for 404s inside the function
+// Catch-all for 404s
 app.use((req, res) => {
-  console.log(`[API 404] ${req.method} ${req.url} - No route matched`);
+  console.log(`[API 404] ${req.method} ${req.url}`);
   res.status(404).json({ 
-    error: "Endpoint não encontrado no servidor de API",
+    error: "Endpoint não encontrado",
     method: req.method,
-    path: req.url,
-    hint: "Verifique se a rota está correta no netlify.toml e no código do servidor."
+    path: req.url
   });
 });
 
-const handler = serverless(app);
-export { handler };
+export const handler = serverless(app);
