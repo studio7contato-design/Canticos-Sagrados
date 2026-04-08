@@ -156,17 +156,9 @@ apiRouter.get("/auth-callback", (req, res) => {
   `);
 });
 
-// Mount the router at the root of the function
-// Netlify functions are accessed at /.netlify/functions/[name]
-// We use a middleware to strip the function name prefix if it exists
-app.use((req, res, next) => {
-  const prefix = "/.netlify/functions/api";
-  if (req.url.startsWith(prefix)) {
-    req.url = req.url.slice(prefix.length) || "/";
-  }
-  next();
-});
-
+// Mount the router on multiple possible base paths for maximum compatibility
+app.use("/.netlify/functions/api", apiRouter);
+app.use("/api", apiRouter);
 app.use("/", apiRouter);
 
 // Catch-all for 404s
@@ -175,7 +167,8 @@ app.use((req, res) => {
   res.status(404).json({ 
     error: "Endpoint não encontrado",
     method: req.method,
-    path: req.url
+    path: req.url,
+    suggestion: "Verifique se a rota POST /create-checkout-session está correta."
   });
 });
 
