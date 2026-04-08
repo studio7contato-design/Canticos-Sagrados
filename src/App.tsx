@@ -204,12 +204,18 @@ function AppContent() {
           supabase.from('albums').select('*').order('release_date', { ascending: false }).limit(50)
         ]).catch(err => {
           console.error("[APP] Erro na busca inicial:", err);
+          setDbError("Erro de conexão com o banco de dados.");
           return [
             { data: { session: null }, error: err }, 
             { data: [] as any[], error: err }, 
             { data: [] as any[], error: err }
           ] as any;
         });
+
+        if (songsRes.error) {
+          console.error("[APP] Erro ao buscar músicas:", songsRes.error);
+          setDbError(`Erro ao carregar músicas: ${songsRes.error.message}`);
+        }
 
         // 3. Handle Auth
         setLoadingStatus('Verificando sua conta...');
@@ -328,6 +334,7 @@ function AppContent() {
   const [selectedTheme, setSelectedTheme] = useState<string | null>(null);
   const [loginError, setLoginError] = useState<string | null>(null);
   const [loginCooldown, setLoginCooldown] = useState(0);
+  const [dbError, setDbError] = useState<string | null>(null);
 
   useEffect(() => {
     if (loginCooldown > 0) {
@@ -336,8 +343,13 @@ function AppContent() {
     }
   }, [loginCooldown]);
 
-  const categories = ['Versículos', 'Citações', 'Autorais'];
-  const themes = ['Sábado', 'Santificação', 'Amor', 'Esperança'];
+  const categories = songs.length > 0 
+    ? Array.from(new Set(songs.map(s => s.category || 'Outros')))
+    : ['Versículos', 'Citações', 'Autorais'];
+    
+  const themes = songs.length > 0
+    ? Array.from(new Set(songs.map(s => s.theme || 'Geral'))).slice(0, 8)
+    : ['Sábado', 'Santificação', 'Amor', 'Esperança'];
 
   useEffect(() => {
     localStorage.setItem('celeste_favorites', JSON.stringify(favorites));
@@ -706,6 +718,12 @@ function AppContent() {
       </header>
 
       <main className="max-w-screen-xl mx-auto px-6 py-8">
+        {dbError && (
+          <div className="mb-8 p-4 bg-red-50 border border-red-200 rounded-2xl flex items-center gap-3 text-red-700">
+            <AlertCircle size={20} />
+            <p className="text-sm font-medium">{dbError}</p>
+          </div>
+        )}
         {!supabase && (
           <div className="mb-8 p-4 bg-amber-50 border border-amber-200 rounded-2xl flex items-center gap-3 text-amber-700">
             <AlertCircle size={20} />
@@ -804,7 +822,7 @@ function AppContent() {
                   </section>
 
                   {/* Categories */}
-                  {categories.map(cat => (
+                  {categories.length > 0 ? categories.map(cat => (
                     <section key={cat}>
                       <div className="flex items-center justify-between mb-4">
                         <h3 className="text-xl font-bold">{cat}</h3>
@@ -855,7 +873,12 @@ function AppContent() {
                         ))}
                       </div>
                     </section>
-                  ))}
+                  )) : (
+                    <div className="py-20 text-center">
+                      <Disc size={48} className="mx-auto text-gray-200 mb-4 animate-pulse" />
+                      <p className="text-gray-400">Nenhuma música encontrada no catálogo.</p>
+                    </div>
+                  )}
 
                   {/* Albums Section */}
                   {albums.length > 0 && (

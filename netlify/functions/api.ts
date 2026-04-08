@@ -138,6 +138,9 @@ apiRouter.get("/auth-callback", (req, res) => {
   `);
 });
 
+// Mount the router at both the root and the expected Netlify path for maximum compatibility
+app.use("/api", apiRouter);
 app.use("/.netlify/functions/api", apiRouter);
+app.use("/", apiRouter);
 
 export const handler = serverless(app);
