@@ -343,13 +343,8 @@ function AppContent() {
     }
   }, [loginCooldown]);
 
-  const categories = songs.length > 0 
-    ? Array.from(new Set(songs.map(s => s.category || 'Outros')))
-    : ['Versículos', 'Citações', 'Autorais'];
-    
-  const themes = songs.length > 0
-    ? Array.from(new Set(songs.map(s => s.theme || 'Geral'))).slice(0, 8)
-    : ['Sábado', 'Santificação', 'Amor', 'Esperança'];
+  const categories = Array.from(new Set(songs.map(s => s.category || 'Outros')));
+  const themes = Array.from(new Set(songs.map(s => s.theme || 'Geral'))).slice(0, 8);
 
   useEffect(() => {
     localStorage.setItem('celeste_favorites', JSON.stringify(favorites));
@@ -822,61 +817,64 @@ function AppContent() {
                   </section>
 
                   {/* Categories */}
-                  {categories.length > 0 ? categories.map(cat => (
-                    <section key={cat}>
-                      <div className="flex items-center justify-between mb-4">
-                        <h3 className="text-xl font-bold">{cat}</h3>
-                        <button 
-                          onClick={() => {
-                            const catSongs = songs.filter(s => s.category === cat);
-                            handlePlaySong(catSongs[0], catSongs);
-                          }}
-                          className="text-apple-red text-sm font-medium hover:underline"
-                        >
-                          Ouvir tudo
-                        </button>
-                      </div>
-                      <div className="flex gap-6 overflow-x-auto no-scrollbar pb-4">
-                        {songs.filter(s => s.category === cat).map(song => (
-                          <div 
-                            key={song.id} 
-                            className="flex-shrink-0 w-40 group cursor-pointer"
-                            onClick={() => handlePlaySong(song, songs.filter(s => s.category === cat))}
+                  {songs.length > 0 ? categories.map(cat => {
+                    const catSongs = songs.filter(s => s.category === cat);
+                    if (catSongs.length === 0) return null;
+                    
+                    return (
+                      <section key={cat}>
+                        <div className="flex items-center justify-between mb-4">
+                          <h3 className="text-xl font-bold">{cat}</h3>
+                          <button 
+                            onClick={() => handlePlaySong(catSongs[0], catSongs)}
+                            className="text-apple-red text-sm font-medium hover:underline"
                           >
-                            <div className="relative aspect-square rounded-2xl overflow-hidden mb-3 shadow-md group-hover:shadow-xl transition-all duration-300">
-                              <img src={song.cover_url} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                              <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
-                                <div className="opacity-0 group-hover:opacity-100 transform translate-y-2 group-hover:translate-y-0 transition-all duration-300 bg-white/90 p-3 rounded-full text-black">
-                                  {(song.is_free || isPro) ? <Play size={20} fill="currentColor" /> : <Lock size={20} />}
+                            Ouvir tudo
+                          </button>
+                        </div>
+                        <div className="flex gap-6 overflow-x-auto no-scrollbar pb-4">
+                          {catSongs.map(song => (
+                            <div 
+                              key={song.id} 
+                              className="flex-shrink-0 w-40 group cursor-pointer"
+                              onClick={() => handlePlaySong(song, catSongs)}
+                            >
+                              <div className="relative aspect-square rounded-2xl overflow-hidden mb-3 shadow-md group-hover:shadow-xl transition-all duration-300">
+                                <img src={song.cover_url} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
+                                  <div className="opacity-0 group-hover:opacity-100 transform translate-y-2 group-hover:translate-y-0 transition-all duration-300 bg-white/90 p-3 rounded-full text-black">
+                                    {(song.is_free || isPro) ? <Play size={20} fill="currentColor" /> : <Lock size={20} />}
+                                  </div>
                                 </div>
-                              </div>
-                              <button 
-                                onClick={(e) => toggleFavorite(e, song.id)}
-                                className={cn(
-                                  "absolute top-2 left-2 p-1.5 rounded-lg backdrop-blur-md transition-all z-10",
-                                  favorites.includes(song.id) 
-                                    ? "bg-apple-red/20 text-apple-red opacity-100" 
-                                    : "bg-black/20 text-white opacity-0 group-hover:opacity-100 hover:bg-black/40"
+                                <button 
+                                  onClick={(e) => toggleFavorite(e, song.id)}
+                                  className={cn(
+                                    "absolute top-2 left-2 p-1.5 rounded-lg backdrop-blur-md transition-all z-10",
+                                    favorites.includes(song.id) 
+                                      ? "bg-apple-red/20 text-apple-red opacity-100" 
+                                      : "bg-black/20 text-white opacity-0 group-hover:opacity-100 hover:bg-black/40"
+                                  )}
+                                >
+                                  <Heart size={14} fill={favorites.includes(song.id) ? "currentColor" : "none"} />
+                                </button>
+                                {!song.is_free && !isPro && (
+                                  <div className="absolute top-2 right-2 bg-black/40 backdrop-blur-md text-white p-1.5 rounded-lg">
+                                    <Lock size={12} />
+                                  </div>
                                 )}
-                              >
-                                <Heart size={14} fill={favorites.includes(song.id) ? "currentColor" : "none"} />
-                              </button>
-                              {!song.is_free && !isPro && (
-                                <div className="absolute top-2 right-2 bg-black/40 backdrop-blur-md text-white p-1.5 rounded-lg">
-                                  <Lock size={12} />
-                                </div>
-                              )}
+                              </div>
+                              <h4 className="font-medium text-sm truncate">{song.title}</h4>
+                              <p className="text-xs text-gray-400 truncate">{song.theme}</p>
                             </div>
-                            <h4 className="font-medium text-sm truncate">{song.title}</h4>
-                            <p className="text-xs text-gray-400 truncate">{song.theme}</p>
-                          </div>
-                        ))}
-                      </div>
-                    </section>
-                  )) : (
+                          ))}
+                        </div>
+                      </section>
+                    );
+                  }) : (
                     <div className="py-20 text-center">
                       <Disc size={48} className="mx-auto text-gray-200 mb-4 animate-pulse" />
                       <p className="text-gray-400">Nenhuma música encontrada no catálogo.</p>
+                      {!supabase && <p className="text-xs text-amber-600 mt-2">Usando modo offline (Mock Data)</p>}
                     </div>
                   )}
 
