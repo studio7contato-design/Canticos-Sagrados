@@ -376,61 +376,44 @@ function AppContent() {
       return;
     }
     try {
-      console.log("checkSubscription: Iniciando busca para o usuário:", userId);
+      console.log("checkSubscription: Iniciando busca via Servidor para o usuário:", userId);
       
       // Busca o usuário atual do Auth para pegar o e-mail
       const { data: { user: authUser } } = await supabase.auth.getUser();
       const userEmail = authUser?.email || null;
 
-      // Primeiro, tenta buscar o perfil via cliente (pode falhar se RLS estiver ativo)
-      let { data, error } = await supabase
+      // SEMPRE usamos a API do servidor para verificar o status PRO.
+      // Isso ignora qualquer bloqueio de RLS (Row Level Security) que o cliente possa ter.
+      try {
+        const response = await fetch('/api/init-profile', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId, email: userEmail })
+        });
+        
+        if (response.ok) {
+          const result = await response.json();
+          if (result.profile) {
+            console.log("checkSubscription: Status PRO carregado do servidor:", result.profile.is_pro);
+            setIsPro(result.profile.is_pro);
+            return;
+          }
+        } else {
+          console.error("checkSubscription: Erro na resposta da API:", response.status);
+        }
+      } catch (fetchErr) {
+        console.error("checkSubscription: Erro ao chamar API de perfil:", fetchErr);
+      }
+
+      // Fallback apenas se a API falhar totalmente
+      const { data, error } = await supabase
         .from('profiles')
-        .select('is_pro, email')
+        .select('is_pro')
         .eq('id', userId)
         .single();
       
-      // Se o erro for que o registro não existe (PGRST116) ou erro de permissão (42501)
-      // Vamos usar o servidor para inicializar o perfil com segurança
-      if ((error && (error.code === 'PGRST116' || error.code === '42501')) || !data) {
-        console.log("checkSubscription: Perfil não encontrado ou erro de permissão. Tentando inicializar via servidor...");
-        
-        try {
-          // Só tentamos a API se ela estiver respondendo
-          if (apiStatus === 'ok') {
-            const response = await fetch('/api/init-profile', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ userId, email: userEmail })
-            });
-            
-            if (response.ok) {
-              const result = await response.json();
-              data = result.profile;
-              error = null;
-            }
-          }
-        } catch (fetchErr) {
-          console.error("checkSubscription: Erro ao chamar init-profile:", fetchErr);
-        }
-      } else if (error) {
-        console.error("checkSubscription: Erro ao buscar perfil:", error.message);
-        return;
-      }
-      
       if (data) {
-        console.log("checkSubscription: Status PRO carregado:", data.is_pro);
         setIsPro(data.is_pro);
-        
-        // Se o e-mail estiver faltando no banco ou for diferente, vamos atualizar via API (Admin)
-        // Usamos a API porque o cliente pode ser bloqueado por RLS
-        if (data.email !== userEmail && userEmail) {
-          console.log("checkSubscription: Sincronizando e-mail no perfil via API...");
-          fetch('/api/init-profile', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ userId, email: userEmail })
-          }).catch(err => console.error("Erro ao sincronizar e-mail:", err));
-        }
       }
     } catch (err) {
       console.error("checkSubscription: Erro fatal:", err);
