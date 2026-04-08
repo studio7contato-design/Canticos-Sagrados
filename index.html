@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Expires" content="0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Cânticos Sagrados</title>
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="theme-color" content="#ff3b30" />
+  </head>
+  <body>
+    <script>
+      window.addEventListener('error', function(e) {
+        console.error('Script error caught in index.html:', e);
+        var root = document.getElementById('root');
+        if (root && (root.innerHTML.includes('Carregando') || root.innerHTML === '')) {
+          root.innerHTML = '<div style="padding: 20px; color: red; font-family: sans-serif; text-align: center;">' +
+            '<h2>Erro Crítico de Carregamento</h2>' +
+            '<p>O navegador não conseguiu carregar os arquivos do site.</p>' +
+            '<p style="font-size: 12px; color: #666;">Erro: ' + (e.message || 'Falha no script') + '</p>' +
+            '<div style="display: flex; gap: 10px; justify-content: center; margin-top: 20px;">' +
+            '<button onclick="window.location.reload()" style="padding: 10px 20px; background: #ff3b30; color: white; border: none; border-radius: 8px; cursor: pointer;">Tentar Novamente</button>' +
+            '<button onclick="clearAllCache()" style="padding: 10px 20px; background: #666; color: white; border: none; border-radius: 8px; cursor: pointer;">Limpar Cache</button>' +
+            '</div>' +
+            '</div>';
+        }
+      }, true);
+
+      function clearAllCache() {
+        if ('serviceWorker' in navigator) {
+          navigator.serviceWorker.getRegistrations().then(function(registrations) {
+            for(let registration of registrations) {
+              registration.unregister();
+            }
+          });
+        }
+        if ('caches' in window) {
+          caches.keys().then(function(names) {
+            for (let name of names) caches.delete(name);
+          });
+        }
+        localStorage.clear();
+        sessionStorage.clear();
+        alert('Cache limpo! A página será recarregada.');
+        window.location.reload();
+      }
+      console.log('HTML diagnostic script initialized');
+    </script>
+    <div id="root">
+      <div style="padding: 20px; font-family: sans-serif; text-align: center;">
+        <h2 style="color: #ff3b30;">Carregando Cânticos Sagrados...</h2>
+        <p>Se esta mensagem não desaparecer em alguns segundos, verifique se o JavaScript está ativado ou se há erros no console (F12).</p>
+      </div>
+    </div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+

@@ -1,0 +1,21 @@
+{
+  "name": "Música Celeste",
+  "short_name": "Celeste",
+  "description": "Ministério de Música Celeste - Hinos e Louvores",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#ff3b30",
+  "icons": [
+    {
+      "src": "https://picsum.photos/seed/celeste/192/192",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "https://picsum.photos/seed/celeste/512/512",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
