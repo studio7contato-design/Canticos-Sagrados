@@ -7,9 +7,11 @@ interface SubscriptionModalProps {
   isOpen: boolean;
   onClose: () => void;
   userId?: string;
+  onSync?: () => Promise<void>;
+  isSyncing?: boolean;
 }
 
-export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({ isOpen, onClose, userId }) => {
+export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({ isOpen, onClose, userId, onSync, isSyncing }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -158,10 +160,11 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({ isOpen, on
           </p>
           
           <button 
-            onClick={() => window.location.reload()}
-            className="mt-4 text-xs text-gray-400 hover:text-apple-red transition-colors block w-full"
+            onClick={onSync || (() => window.location.reload())}
+            disabled={isSyncing}
+            className="mt-4 text-xs text-gray-400 hover:text-apple-red transition-colors block w-full disabled:opacity-50"
           >
-            Já assinou? Clique aqui para atualizar seu status.
+            {isSyncing ? 'Sincronizando...' : 'Já assinou? Clique aqui para sincronizar seu status.'}
           </button>
         </div>
       </motion.div>

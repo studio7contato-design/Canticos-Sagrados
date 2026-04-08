@@ -518,6 +518,33 @@ function AppContent() {
     }
   };
 
+  const [isSyncing, setIsSyncing] = useState(false);
+  const handleSyncSubscription = async () => {
+    if (!user || isSyncing) return;
+    
+    setIsSyncing(true);
+    try {
+      const response = await fetch('/api/sync-subscription', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: user.id, email: user.email })
+      });
+      
+      const data = await response.json();
+      if (response.ok) {
+        setIsPro(true);
+        alert(data.message || "Assinatura sincronizada com sucesso!");
+      } else {
+        alert(data.error || "Não encontramos uma assinatura ativa para este e-mail.");
+      }
+    } catch (err) {
+      console.error("Erro ao sincronizar:", err);
+      alert("Erro ao conectar com o servidor.");
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
   const handlePlaySong = (song: Song | undefined, customQueue?: Song[]) => {
     if (!song) return;
     if (!song.is_free && !isPro) {
@@ -670,12 +697,13 @@ function AppContent() {
               <p className="text-sm font-medium">{user.email?.split('@')[0]}</p>
             </div>
             <button 
-              onClick={() => user && checkSubscription(user.id)}
-              className="flex items-center gap-2 px-3 py-2 bg-apple-gray rounded-full text-gray-600 hover:text-apple-red hover:bg-red-50 transition-all active:scale-95"
-              title="Atualizar Assinatura"
+              onClick={handleSyncSubscription}
+              disabled={isSyncing}
+              className="flex items-center gap-2 px-3 py-2 bg-apple-gray rounded-full text-gray-600 hover:text-apple-red hover:bg-red-50 transition-all active:scale-95 disabled:opacity-50"
+              title="Sincronizar Assinatura"
             >
-              <ShieldCheck size={18} className={isPro ? "text-green-500" : "text-gray-400"} />
-              <span className="text-xs font-bold hidden sm:inline">{isPro ? "Premium" : "Atualizar"}</span>
+              <ShieldCheck size={18} className={isPro ? "text-green-500" : (isSyncing ? "animate-spin" : "text-gray-400")} />
+              <span className="text-xs font-bold hidden sm:inline">{isPro ? "Premium" : (isSyncing ? "Sincronizando..." : "Sincronizar")}</span>
             </button>
             <button 
               onClick={handleLogout}
@@ -1452,6 +1480,8 @@ function AppContent() {
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         userId={user?.id}
+        onSync={handleSyncSubscription}
+        isSyncing={isSyncing}
       />
 
       <AdminPanel 

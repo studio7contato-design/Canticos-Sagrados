@@ -31,6 +31,9 @@ if (supabaseAdmin) {
   console.warn("[API] Supabase Admin NOT initialized - Webhooks and Profile Init will fail");
 }
 
+let lastWebhookError: string | null = null;
+let lastWebhookEvent: string | null = null;
+
 // Health check
 apiRouter.get("/health", (req, res) => {
   res.json({ 
@@ -38,6 +41,10 @@ apiRouter.get("/health", (req, res) => {
     supabase: supabaseAdmin ? "connected" : "not_connected",
     stripe: process.env.STRIPE_SECRET_KEY ? "configured" : "not_configured",
     webhook: process.env.STRIPE_WEBHOOK_SECRET ? "configured" : "not_configured",
+    last_webhook: {
+      event: lastWebhookEvent,
+      error: lastWebhookError
+    },
     env: {
       has_supabase_url: !!process.env.VITE_SUPABASE_URL,
       has_supabase_key: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
@@ -60,10 +67,15 @@ apiRouter.post("/webhook", express.raw({ type: 'application/json' }), async (req
   try {
     if (webhookSecret && sig) {
       event = stripe.webhooks.constructEvent(req.body, sig, webhookSecret);
+      lastWebhookEvent = event.type;
+      lastWebhookError = null;
     } else {
       event = JSON.parse(req.body.toString());
+      lastWebhookEvent = event.type;
+      lastWebhookError = "Warning: No signature validation";
     }
   } catch (err: any) {
+    lastWebhookError = err.message;
     return res.status(400).send(`Webhook Error: ${err.message}`);
   }
 
@@ -74,36 +86,56 @@ apiRouter.post("/webhook", express.raw({ type: 'application/json' }), async (req
 
     console.log(`[WEBHOOK] Checkout concluído. UserID: ${userId}, Email: ${userEmail}`);
 
-    if (userId && supabaseAdmin) {
-      const updateData: any = { 
-        is_pro: true, 
-        updated_at: new Date().toISOString() 
-      };
-      if (userEmail) updateData.email = userEmail;
+    if (supabaseAdmin) {
+      let targetUserId = userId;
 
-      console.log(`[WEBHOOK] Atualizando perfil no Supabase para PRO...`);
-      const { error: updateError } = await supabaseAdmin
-        .from('profiles')
-        .update(updateData)
-        .eq('id', userId);
-
-      if (updateError) {
-        console.error(`[WEBHOOK] Erro ao atualizar Supabase:`, updateError.message);
-        // Tenta inserir se o update falhar (caso o perfil não exista por algum motivo)
-        const { error: insertError } = await supabaseAdmin
+      // Se o userId não veio no checkout, tenta achar pelo e-mail
+      if (!targetUserId && userEmail) {
+        console.log(`[WEBHOOK] UserID ausente. Buscando perfil pelo e-mail: ${userEmail}`);
+        const { data: profileByEmail } = await supabaseAdmin
           .from('profiles')
-          .upsert({ id: userId, ...updateData });
+          .select('id')
+          .eq('email', userEmail)
+          .maybeSingle();
         
-        if (insertError) {
-          console.error(`[WEBHOOK] Erro fatal no Upsert:`, insertError.message);
+        if (profileByEmail) {
+          targetUserId = profileByEmail.id;
+          console.log(`[WEBHOOK] UserID encontrado via e-mail: ${targetUserId}`);
+        }
+      }
+
+      if (targetUserId) {
+        const updateData: any = { 
+          is_pro: true, 
+          updated_at: new Date().toISOString() 
+        };
+        if (userEmail) updateData.email = userEmail;
+
+        console.log(`[WEBHOOK] Atualizando perfil ${targetUserId} para PRO...`);
+        const { error: updateError } = await supabaseAdmin
+          .from('profiles')
+          .update(updateData)
+          .eq('id', targetUserId);
+
+        if (updateError) {
+          console.error(`[WEBHOOK] Erro ao atualizar Supabase:`, updateError.message);
+          const { error: insertError } = await supabaseAdmin
+            .from('profiles')
+            .upsert({ id: targetUserId, ...updateData });
+          
+          if (insertError) {
+            console.error(`[WEBHOOK] Erro fatal no Upsert:`, insertError.message);
+          } else {
+            console.log(`[WEBHOOK] Perfil criado/atualizado com sucesso via Upsert.`);
+          }
         } else {
-          console.log(`[WEBHOOK] Perfil criado/atualizado com sucesso via Upsert.`);
+          console.log(`[WEBHOOK] Perfil atualizado com sucesso para PRO.`);
         }
       } else {
-        console.log(`[WEBHOOK] Perfil atualizado com sucesso para PRO.`);
+        console.error(`[WEBHOOK] Falha: Não foi possível identificar o usuário (ID: ${userId}, Email: ${userEmail})`);
       }
     } else {
-      console.error(`[WEBHOOK] Falha: userId (${userId}) ou supabaseAdmin (${!!supabaseAdmin}) ausente.`);
+      console.error(`[WEBHOOK] Falha: supabaseAdmin ausente.`);
     }
   }
 
@@ -138,6 +170,56 @@ apiRouter.post("/create-checkout-session", async (req, res) => {
     res.json({ url: session.url });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
+  }
+});
+
+// Sync Subscription (Manual Fix)
+apiRouter.post("/sync-subscription", async (req, res) => {
+  const { userId, email } = req.body;
+
+  if (!supabaseAdmin || !process.env.STRIPE_SECRET_KEY || !userId || !email) {
+    return res.status(400).json({ error: "Configuração incompleta ou dados ausentes" });
+  }
+
+  try {
+    const stripeClient = new Stripe(process.env.STRIPE_SECRET_KEY);
+    
+    // Busca assinaturas ativas no Stripe para este e-mail
+    console.log(`[SYNC] Buscando assinaturas no Stripe para: ${email}`);
+    const customers = await stripeClient.customers.list({ email, limit: 1 });
+    
+    if (customers.data.length === 0) {
+      return res.status(404).json({ error: "Nenhum cliente encontrado no Stripe com este e-mail." });
+    }
+
+    const customerId = customers.data[0].id;
+    const subscriptions = await stripeClient.subscriptions.list({
+      customer: customerId,
+      status: 'active',
+      limit: 1
+    });
+
+    if (subscriptions.data.length > 0) {
+      console.log(`[SYNC] Assinatura ativa encontrada! Atualizando Supabase para ${userId}`);
+      
+      const { error } = await supabaseAdmin
+        .from('profiles')
+        .upsert({ 
+          id: userId, 
+          email, 
+          is_pro: true, 
+          updated_at: new Date().toISOString() 
+        });
+
+      if (error) throw error;
+      
+      return res.json({ success: true, message: "Assinatura sincronizada com sucesso! Você agora é PRO." });
+    } else {
+      return res.status(404).json({ error: "Nenhuma assinatura ativa encontrada no Stripe para este e-mail." });
+    }
+  } catch (err: any) {
+    console.error(`[SYNC ERROR]`, err.message);
+    res.status(500).json({ error: err.message });
   }
 });
 
