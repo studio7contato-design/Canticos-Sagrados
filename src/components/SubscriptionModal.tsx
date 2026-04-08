@@ -156,6 +156,13 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({ isOpen, on
           <p className="mt-4 text-[10px] text-gray-400">
             Cancele a qualquer momento. Termos e condições se aplicam.
           </p>
+          
+          <button 
+            onClick={() => window.location.reload()}
+            className="mt-4 text-xs text-gray-400 hover:text-apple-red transition-colors block w-full"
+          >
+            Já assinou? Clique aqui para atualizar seu status.
+          </button>
         </div>
       </motion.div>
     </div>

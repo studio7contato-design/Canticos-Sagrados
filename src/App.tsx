@@ -670,6 +670,14 @@ function AppContent() {
               <p className="text-sm font-medium">{user.email?.split('@')[0]}</p>
             </div>
             <button 
+              onClick={() => user && checkSubscription(user.id)}
+              className="flex items-center gap-2 px-3 py-2 bg-apple-gray rounded-full text-gray-600 hover:text-apple-red hover:bg-red-50 transition-all active:scale-95"
+              title="Atualizar Assinatura"
+            >
+              <ShieldCheck size={18} className={isPro ? "text-green-500" : "text-gray-400"} />
+              <span className="text-xs font-bold hidden sm:inline">{isPro ? "Premium" : "Atualizar"}</span>
+            </button>
+            <button 
               onClick={handleLogout}
               className="flex items-center gap-2 px-3 py-2 bg-apple-gray rounded-full text-gray-600 hover:text-apple-red hover:bg-red-50 transition-all active:scale-95"
               title="Sair"

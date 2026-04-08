@@ -36,7 +36,13 @@ apiRouter.get("/health", (req, res) => {
   res.json({ 
     status: "ok", 
     supabase: supabaseAdmin ? "connected" : "not_connected",
-    stripe: process.env.STRIPE_SECRET_KEY ? "configured" : "not_configured"
+    stripe: process.env.STRIPE_SECRET_KEY ? "configured" : "not_configured",
+    webhook: process.env.STRIPE_WEBHOOK_SECRET ? "configured" : "not_configured",
+    env: {
+      has_supabase_url: !!process.env.VITE_SUPABASE_URL,
+      has_supabase_key: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
+      webhook_prefix: process.env.STRIPE_WEBHOOK_SECRET?.substring(0, 6)
+    }
   });
 });
 
@@ -66,11 +72,38 @@ apiRouter.post("/webhook", express.raw({ type: 'application/json' }), async (req
     const userId = session.client_reference_id;
     const userEmail = session.customer_details?.email;
 
+    console.log(`[WEBHOOK] Checkout concluído. UserID: ${userId}, Email: ${userEmail}`);
+
     if (userId && supabaseAdmin) {
-      const updateData: any = { is_pro: true, updated_at: new Date().toISOString() };
+      const updateData: any = { 
+        is_pro: true, 
+        updated_at: new Date().toISOString() 
+      };
       if (userEmail) updateData.email = userEmail;
 
-      await supabaseAdmin.from('profiles').update(updateData).eq('id', userId);
+      console.log(`[WEBHOOK] Atualizando perfil no Supabase para PRO...`);
+      const { error: updateError } = await supabaseAdmin
+        .from('profiles')
+        .update(updateData)
+        .eq('id', userId);
+
+      if (updateError) {
+        console.error(`[WEBHOOK] Erro ao atualizar Supabase:`, updateError.message);
+        // Tenta inserir se o update falhar (caso o perfil não exista por algum motivo)
+        const { error: insertError } = await supabaseAdmin
+          .from('profiles')
+          .upsert({ id: userId, ...updateData });
+        
+        if (insertError) {
+          console.error(`[WEBHOOK] Erro fatal no Upsert:`, insertError.message);
+        } else {
+          console.log(`[WEBHOOK] Perfil criado/atualizado com sucesso via Upsert.`);
+        }
+      } else {
+        console.log(`[WEBHOOK] Perfil atualizado com sucesso para PRO.`);
+      }
+    } else {
+      console.error(`[WEBHOOK] Falha: userId (${userId}) ou supabaseAdmin (${!!supabaseAdmin}) ausente.`);
     }
   }
 
